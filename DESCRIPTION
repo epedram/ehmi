@@ -1,16 +1,19 @@
 Package: ehmi
-Title: What the Package Does (One Line, Title Case)
+Title: Estimate Spatial Surfacs of Extreme Heat and Cold Event Magnitude Indicators (EHMI and ECMI)
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Pedram",
+           family = "Fard",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
+           email = "pedram.fard@uwaterloo.ca",
+           comment = c(ORCID = "http://orcid.org/0000-0002-7846-3086"))
+Description: This package uses a spatial interpolation method to estimate 
+continuous surfaces representing EHMI and ECMI values at daily intervals.
 License: `use_mit_license()`, `use_gpl3_license()` or friends to
     pick a license
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.0.0
+URL: https://github.com/epedram/ehmi
+BugReports: https://github.com/epedram/ehmi/issues
