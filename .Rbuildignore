@@ -1,2 +1,4 @@
+^renv$
+^renv\.lock$
 ^ehmi\.Rproj$
 ^\.Rproj\.user$

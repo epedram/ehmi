@@ -7,8 +7,7 @@ Authors@R:
            role = c("aut", "cre"),
            email = "pedram.fard@uwaterloo.ca",
            comment = c(ORCID = "http://orcid.org/0000-0002-7846-3086"))
-Description: This package uses a spatial interpolation method to estimate 
-continuous surfaces representing EHMI and ECMI values at daily intervals.
+Description: This package uses a spatial interpolation method to estimate continuous surfaces representing EHMI and ECMI values at daily intervals.
 License: `use_mit_license()`, `use_gpl3_license()` or friends to
     pick a license
 Encoding: UTF-8
