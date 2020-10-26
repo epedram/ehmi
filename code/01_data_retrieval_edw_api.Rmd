@@ -131,12 +131,17 @@ noaa_sensors_skim_report
 
 
 ## Load US counties spatial layer (IPUMS NHGIS)
-```{r, eval = FALSE}
+```{r}
 nhgis_counties_compiled_sf <- readRDS(here(input_dir, 
                                  "nhgis_compiled.rds"))[[1]]
 
-st_crs(noaa_sensors_sf)$epsg
 st_crs(nhgis_counties_compiled_sf)$epsg
+
+nhgis_counties_compiled_sf <- st_transform(nhgis_counties_compiled_sf,
+                              st_crs(spatial_projection))
+
+nhgis_counties_compiled_sf <- st_zm(nhgis_counties_compiled_sf, 
+                                    drop=TRUE, what = "ZM")
 
 noaa_compiled_sf <- st_join(noaa_sensors_sf, 
                        nhgis_counties_compiled_sf,
@@ -148,7 +153,7 @@ noaa_compiled_sf <- st_join(noaa_sensors_sf,
 noaa_compiled_sf_selected <- noaa_compiled_sf %>% 
   filter(STATE == "California")
 
-us_counties_selected <- nhgis_compiled_selected %>% 
+us_counties_selected <- nhgis_counties_compiled_sf %>% 
   filter(STATE == "California")
 
 ObjSave(
