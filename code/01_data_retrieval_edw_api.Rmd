@@ -1,0 +1,346 @@
+---
+title: "Spatiotemporal Delineation of Extreme Heat/Cold Events"
+subtitle: "Data Retrieval Script"
+author:
+- affiliation: University of Waterloo
+  email: pfard@uwaterloo.ca
+  name: Pedram Fard
+output:
+  html_document:
+    self_contained: true
+    toc: true
+    toc_float:
+      toc_collapsed: false
+    number_sections: false
+    smooth_scroll: true
+    toc_depth: 4
+    theme: default
+    highlight: zenburn
+    df_print: paged
+
+  pdf_document: default
+  word_document: default
+
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Workspace Setup
+```{r setup, include=FALSE}
+knitr::opts_knit$set(progress = TRUE, 
+                     verbose = TRUE)
+
+knitr::opts_chunk$set(results = "hold", 
+                      echo = FALSE, 
+                      warning=FALSE, 
+                      message = FALSE, 
+                      include = TRUE)
+```
+
+
+# I/O Setup
+```{r set IO parameters}
+library(here)
+
+spatial_projection  = 4269 #NAD83
+
+project_name <- "Data_from_EDW_"
+
+input_dir <- "data"
+
+output_dir <- (here("outputs","/"))
+
+timestamped <- format(Sys.time(), "%m%d_%H%M")
+
+print(Sys.time)
+print(timestamped)
+
+timestamped_folder <- paste0(project_name ,timestamped)
+
+dir.create(file.path(here("outputs"), timestamped_folder))
+
+output_path <- paste0(output_dir, timestamped_folder)
+
+print(output_dir)
+print(output_path)
+```
+
+
+## Libraries and Functions
+```{r libs}
+source(here("R", "libraries.R"))
+
+source(here("R", "helper_functions.R"))
+
+writeLines(capture.output(sessionInfo()), 
+           paste0(output_path, "/_", 
+                  timestamped, "_session_info.txt"))
+```
+
+
+# Retrieve data from EDW
+## Create spatial layer of NOAA sensors
+```{r}
+source(here("R", "edw_credentials.R"))
+
+if (file.exists(here(input_dir, "noaa_sensors_sf.rds")) == TRUE) {
+  print("Loading data from RDS")
+  
+  noaa_sensors_sf <- readRDS(here(input_dir, 
+                                 "noaa_sensors_sf.rds"))[[1]]
+  print("RDS file loaded")
+
+} else {
+  print("Retrieving stations location data from EDW")
+
+query <- "
+select distinct a.shape_id, a.name, a.statefip, a.geoid,  a.startdate, a.enddate, a.summarylevelid, a.latitude, a.longitude
+from exposome_pici.shapefile a 
+inner join exposome_pici.shapefile b on (ST_INTERSECTS(a.geometrywkt,b.geometrywkt))
+where a.summarylevelid = '3000' 
+and b.summarylevelid = '050'
+and a.startdate <= '2008-01-01'
+and a.enddate >= '2018-01-01'
+and b.startdate = '2018-01-01';
+"
+
+## Retrieves Shapefiles within the United States with data between 2008 and 2018
+shape_id_df <- dbGetQuery(pool,query)
+
+noaa_sensors_sf <- st_as_sf(shape_id_df, 
+                                   coords = c("longitude", "latitude"),
+                                   crs = spatial_projection) %>% 
+                   as_tibble() %>% st_as_sf()
+
+ObjSave(noaa_sensors_sf,
+          folder = output_path)
+
+print("RDS file created")
+}
+
+st_crs(noaa_sensors_sf)$epsg
+
+ggplot() +
+  geom_sf(data = noaa_sensors_sf)
+
+noaa_sensors_skim_report <- skim(noaa_sensors_sf) %>%
+     arrange(complete_rate)
+
+noaa_sensors_skim_report
+```
+
+
+## Load US counties spatial layer (IPUMS NHGIS)
+```{r, eval = FALSE}
+nhgis_counties_compiled_sf <- readRDS(here(input_dir, 
+                                 "nhgis_compiled.rds"))[[1]]
+
+st_crs(noaa_sensors_sf)$epsg
+st_crs(nhgis_counties_compiled_sf)$epsg
+
+noaa_compiled_sf <- st_join(noaa_sensors_sf, 
+                       nhgis_counties_compiled_sf,
+                       join = st_within, 
+                       suffix = c("noaa","census"), 
+                       left = TRUE) %>% 
+  st_as_sf() %>% as_tibble() %>% st_as_sf()
+
+noaa_compiled_sf_selected <- noaa_compiled_sf %>% 
+  filter(STATE == "California")
+
+us_counties_selected <- nhgis_compiled_selected %>% 
+  filter(STATE == "California")
+
+ObjSave(
+        noaa_compiled_sf_selected,
+        us_counties_selected,
+
+          folder = output_path)
+
+st_write(noaa_compiled_sf_selected, paste0(output_path, "/", 
+                                           "01_noaa_compiled_sf_selected.shp"), 
+         delete_layer = TRUE)
+```
+
+
+# EDW Tabular query function
+```{r}
+## Function that retrieves data for a specific shape_id and all data after a particular year
+retrieve_data <- function(pool,shape_id, year){
+  
+noaa_query <- glue("
+select b.shape_id, b.name, b.statefip, b.geoid, b.latitude, b.longitude, a.startdate, 
+a.enddate, 
+a.data -> 'wind_direction' -> 'data' ->> 'value' as wind_direction,
+a.data -> 'wind_speed_rate' -> 'data' ->> 'value' as wind_speed_rate,
+a.data -> 'air_temperature_C' -> 'data' ->> 'value' air_temperature_C,
+a.data -> 'air_temperature_F' -> 'data' ->> 'value' air_temperature_F,
+a.data -> 'sea_level_pressure' -> 'data' ->> 'value' sea_level_pressure,
+a.data -> 'dewpoint_temperature_F' -> 'data' ->> 'value' as  dewpoint_temperature_F,
+a.data -> 'dewpoint_temperature_C' -> 'data' ->> 'value' as dewpoint_temperature_C,
+a.data -> 'liquid_precipitation_depth_dimension_one_hour_duration' -> 'data' ->> 'value' as liquid_precipitation_depth_dimension_one_hour_duration,
+a.data -> 'liquid_precipitation_depth_dimension_six_hour_duration' -> 'data' ->> 'value' as liquid_precipitation_depth_dimension_six_hour_duration
+from exposome_pici.facttable_noaa a
+inner join exposome_pici.shapefile b on (a.shape_id=b.shape_id)
+where data_id = 111029 
+and b.shape_id = {shape_id}
+and EXTRACT(YEAR from a.startdate) >= {year}
+"
+)
+
+df_all <- dbGetQuery(pool,noaa_query)
+
+return(df_all)
+}
+```
+
+
+# EDW Spatial query method
+```{r}
+if (file.exists(here(input_dir, 
+                     "multi_stations_df_2010_2020.rds")) == TRUE) 
+  {
+  print("Loading data from RDS")
+  
+  multi_stations_df <- readRDS(here(input_dir, 
+                     "multi_stations_df_2010_2020.rds"))[[1]]
+  print("RDS file loaded")
+
+} else {
+  print("Retrieving stations climatological data from EDW")
+  
+# create a blank table to be the base for further additions
+  multi_stations_df <- tribble(
+  ~air_temperature_c,
+  ~air_temperature_f,
+  ~dewpoint_temperature_c,
+  ~dewpoint_temperature_f,
+  ~enddate,
+  ~geoid,  
+  ~latitude,
+  ~liquid_precipitation_depth_dimension_one_hour_duration,
+  ~liquid_precipitation_depth_dimension_six_hour_duration,
+  ~longitude,
+  ~name,   
+  ~sea_level_pressure,
+  ~shape_id,
+  ~startdate,
+  ~statefip,
+  ~wind_direction,   
+  ~wind_speed_rate
+  )
+
+loop_length <- nrow(noaa_compiled_sf_selected)
+
+loop_length
+i <- 0
+
+for(i in 1:loop_length) 
+    {
+      core_station <- noaa_compiled_sf_selected[i,]
+      station_id <- core_station$shape_id
+      
+      cat(i, ":", core_station$name, "\n")
+      cat("NOAA shape_id: ", station_id, "\n")
+      
+       multi_stations_df_addition <- retrieve_data(pool,
+                     station_id,
+                     2010)
+
+      # construct cumulative table row by row
+       multi_stations_df <- bind_rows(multi_stations_df,
+                                      as_tibble(multi_stations_df_addition))
+
+      cat(paste0(scales::percent(i/loop_length), 
+                 "Completed", "\n\n"))
+}
+
+ObjSave(multi_stations_df,
+
+          folder = output_path)
+
+print("RDS file created")
+}
+
+multi_stations_df %>% 
+  group_by(shape_id) %>% 
+  summarise(stations_count = n())
+
+glimpse(multi_stations_df)
+```
+
+
+## Data type conversion
+```{r}
+# convert meteorological variables data types
+w_columns <-c("air_temperature_c", "air_temperature_f", 
+            "dewpoint_temperature_c", "dewpoint_temperature_f",
+            "wind_direction", "wind_speed_rate",
+            "liquid_precipitation_depth_dimension_one_hour_duration",
+            "liquid_precipitation_depth_dimension_six_hour_duration",
+            "sea_level_pressure"
+            )
+
+multi_stations_dtype_adjusted <- multi_stations_df
+
+multi_stations_dtype_adjusted[, w_columns] <- lapply(w_columns, 
+                                         function(x) as.numeric(multi_stations_dtype_adjusted[[x]]))
+
+hist(multi_stations_dtype_adjusted$air_temperature_c)
+hist(multi_stations_dtype_adjusted$dewpoint_temperature_c)
+hist(multi_stations_dtype_adjusted$wind_speed_rate)
+
+ObjSave(multi_stations_dtype_adjusted,
+
+          folder = output_path)
+```
+
+
+## Compute meteorological indices
+```{r}
+# tag the records having out of range values
+multi_stations_vrange_adjusted <- multi_stations_dtype_adjusted %>% 
+  mutate(., tag = case_when(
+      between(wind_speed_rate, 0, 40) |
+      (air_temperature_c < 60) |
+      (dewpoint_temperature_c) < 60 ~0,
+    TRUE ~ 1)
+  ) %>% 
+  mutate(date_day = as.Date(startdate, "%a, %d %b %Y"))
+
+multi_stations_vrange_adjusted <- multi_stations_vrange_adjusted %>% 
+  mutate(., wind_speed_rate = case_when(
+      (wind_speed_rate >= 0) &
+      (wind_speed_rate < 40) ~wind_speed_rate,
+      TRUE ~NA_real_)
+    )  %>%
+  mutate(., air_temperature_c = case_when(
+      (air_temperature_c < 60) ~air_temperature_c,
+      TRUE ~NA_real_)
+    )  %>%
+  mutate(., dewpoint_temperature_c = case_when(
+      (dewpoint_temperature_c < 80) ~dewpoint_temperature_c,
+      TRUE ~NA_real_)
+    )
+
+ObjSave(multi_stations_vrange_adjusted,
+
+          folder = output_path)
+```
+
+
+### Adjusted variables histogram
+```{r}
+hist(multi_stations_vrange_adjusted$air_temperature_c)
+hist(multi_stations_vrange_adjusted$dewpoint_temperature_c)
+hist(multi_stations_vrange_adjusted$wind_speed_rate)
+
+```
+
+
+### Summary statistics
+```{r, eval = FALSE}
+makeDataReport(multi_stations_vrange_adjusted, 
+               output = "html",
+               replace = TRUE)
+```
