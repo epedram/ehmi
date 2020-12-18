@@ -214,7 +214,7 @@ if (file.exists(here(input_dir,
 } else {
   print("Retrieving stations climatological data from EDW")
   
-# create a blank table to be the base for further additions
+# create a blank table to be used for collection of retrieved variables
   multi_stations_df <- tribble(
   ~air_temperature_c,
   ~air_temperature_f,

@@ -1,0 +1,629 @@
+---
+title: "Spatiotemporal Delineation of Extreme Heat/Cold Events"
+subtitle: "Events Detection"
+author:
+- affiliation: University of Waterloo
+  email: pfard@uwaterloo.ca
+  name: Pedram Fard
+output:
+  html_document:
+    self_contained: true
+    toc: true
+    toc_float:
+      toc_collapsed: false
+    number_sections: false
+    smooth_scroll: true
+    toc_depth: 4
+    theme: default
+    highlight: zenburn
+    df_print: paged
+
+  pdf_document: default
+  word_document: default
+
+editor_options: 
+  chunk_output_type: inline
+---
+
+# Workspace Setup
+```{r setup, include=FALSE}
+knitr::opts_knit$set(progress = TRUE, 
+                     verbose = TRUE)
+
+knitr::opts_chunk$set(results = "hold", 
+                      echo = FALSE, 
+                      warning=FALSE, 
+                      message = FALSE, 
+                      include = TRUE)
+```
+
+
+# I/O Setup
+```{r set IO parameters}
+library(here)
+
+spatial_projection  = 4269 #NAD83
+
+project_name <- "EHE_ECE_Detection_"
+
+input_dir <- "data"
+
+output_dir <- (here("outputs","/"))
+
+timestamped <- format(Sys.time(), "%m%d_%H%M")
+
+print(Sys.time)
+print(timestamped)
+
+timestamped_folder <- paste0(project_name ,timestamped)
+
+dir.create(file.path(here("outputs"), timestamped_folder))
+
+output_path <- paste0(output_dir, timestamped_folder)
+
+print(output_dir)
+print(output_path)
+```
+
+
+## Libraries and Functions
+```{r libs}
+source(here("R", "libraries.R"))
+
+source(here("R", "helper_functions.R"))
+
+writeLines(capture.output(sessionInfo()), 
+           paste0(output_path, "/_", 
+                  timestamped, "_session_info.txt"))
+```
+
+
+# Load data
+## Detect and handle the EDW outlier values
+```{r}
+noaa_compiled_sf_selected <- readRDS(here(input_dir, 
+                                  "noaa_compiled_sf_selected.rds"))[[1]]
+
+multi_stations_df_adjusted <- readRDS(here(input_dir, 
+                                 "multi_stations_df_adjusted.rds"))[[1]]
+
+
+# tag the records that have the out of range values
+stations_adjusted <- multi_stations_df_adjusted %>% 
+  mutate(., tag = case_when(
+      between(wind_speed_rate, 0, 40) |
+      (air_temperature_c < 60) |
+      (dewpoint_temperature_c) < 60 ~0,
+    TRUE ~ 1)   
+  ) %>% 
+  mutate(date_day = as.Date(startdate, "%a, %d %b %Y")) %>% #make a new variable to record the days
+  mutate(date_week = isoweek(startdate))
+
+hist(stations_adjusted$date_week)
+
+stations_adjusted <- stations_adjusted %>% 
+  mutate(., wind_speed_rate = case_when(
+      (wind_speed_rate >= 0) &
+      (wind_speed_rate < 40) ~wind_speed_rate,
+      TRUE ~NA_real_
+    )) %>% 
+  mutate(., air_temperature_c = case_when(
+      (air_temperature_c < 60) ~air_temperature_c,
+      TRUE ~NA_real_
+    ))  %>%
+  mutate(., dewpoint_temperature_c = case_when(
+      (dewpoint_temperature_c < 80) ~dewpoint_temperature_c,
+      TRUE ~NA_real_
+    ))
+```
+
+
+### Plot the adjusted variables histogram
+```{r}
+hist(stations_adjusted$air_temperature_c)
+hist(stations_adjusted$dewpoint_temperature_c)
+hist(stations_adjusted$wind_speed_rate)
+hist(stations_adjusted$tag)
+```
+
+
+### Plot the adjusted variables scatter plot
+```{r}
+glimpse(stations_adjusted)
+
+ggplot(stations_adjusted) +
+  geom_point(aes(x = startdate, 
+                 y = air_temperature_c,
+                 color = air_temperature_c))
+
+ggplot(stations_adjusted) +
+  geom_point(aes(x = startdate, 
+                 y = dewpoint_temperature_c,
+                 color = dewpoint_temperature_c))
+
+ggplot(stations_adjusted) +
+  geom_point(aes(x = startdate, 
+                 y = wind_speed_rate,
+                 color = wind_speed_rate))
+
+  #scale_color_gradient(low="blue", high="green")
+  #scale_color_gradient(low="yellow", high="red")
+```
+
+
+# Compute apparent temperature
+```{r}
+# https://rdrr.io/cran/weathermetrics/man/dewpoint.to.humidity.html
+# https://www.wpc.ncep.noaa.gov/html/heatindex.shtml
+stations_adjusted$derived_humidity <- dewpoint.to.humidity(t = stations_adjusted$air_temperature_c,
+                                dp = stations_adjusted$dewpoint_temperature_c,
+                                temperature.metric = 'celsius')
+
+apparent_temperature <- apparentTemp(tas=stations_adjusted$air_temperature_c,
+                   hurs=stations_adjusted$derived_humidity, 
+                   wind=stations_adjusted$wind_speed_rate)
+
+stations_adjusted$apparent_temperature <- unlist(apparent_temperature)
+
+stations_adjusted_hourly_apparent <- stations_adjusted %>% 
+            mutate(apparent_actual_temp_diff = apparent_temperature - air_temperature_c) %>% 
+    arrange(startdate)
+                     
+glimpse(stations_adjusted_hourly_apparent)
+```
+
+
+# Plot apparent temperature
+```{r, eval = FALSE}
+ggplot(stations_adjusted_hourly_apparent) +
+  geom_point(aes(x = startdate,
+                 y = apparent_temperature,
+                 color = apparent_temperature))
+
+ggplot(stations_adjusted_hourly_apparent) +
+  geom_point(aes(x = startdate,
+                 y = apparent_actual_temp_diff,
+                 color = apparent_actual_temp_diff)) +
+  scale_color_gradient2(
+                        low = "blue", 
+                        mid = "white",
+                        high = "red")
+```
+
+
+# Compute daily means
+```{r}
+ls(stations_adjusted_hourly_apparent)
+
+stations_adjusted_dt <- data.table(stations_adjusted_hourly_apparent)
+
+stations_daily_means <- stations_adjusted_dt[, 
+        .(dm_apparent_temperature = round(mean(apparent_temperature, na.rm = T),2),
+          dm_air_temperature_c = round(mean(air_temperature_c, na.rm = T),2),
+          dm_sea_level_pressure = round(mean(sea_level_pressure, na.rm = T),2),
+          dm_derived_humidity = round(mean(derived_humidity, na.rm = T),2),
+          dm_wind_speed_rate = round(mean(wind_speed_rate, na.rm = T),2)
+          ), 
+        by = .(shape_id, geoid,
+               Station_Name = name, 
+               latitude, longitude,
+               DATE = date_day)]
+
+stations_daily_means_rolling <- stations_daily_means %>% group_by(shape_id) %>% 
+  mutate(dm_at_3_0 = round(mean_run(x = dm_apparent_temperature, 
+                           k = 3, lag = 0, idx = DATE, 
+                           na_rm=TRUE),2)) %>% 
+  mutate(dm_at_32_m3 = round(mean_run(x = dm_apparent_temperature, 
+                           k = 30, lag = 3, idx = DATE, 
+                           na_rm=TRUE),2)) %>% ungroup() %>% 
+  #filter(DATE < as.POSIXct("2020-01-01")) %>% 
+  data.table()
+  
+glimpse(stations_daily_means_rolling)
+```
+
+
+# Compute stations percentiles
+```{r}
+#percentiles
+dm_apparent_temperature_percentiles <- stations_daily_means_rolling[ , 
+           c(list(median = median(dm_apparent_temperature, na.rm = T)), 
+           as.list(round(quantile(dm_apparent_temperature, c(.01, .02, .05, .075, .10, .15, .25,
+                                                            .85, .90, .925, .95, .98, .99), 
+                                  na.rm = T),2))
+            ),
+      by = .(shape_id)]
+
+# partial window using adaptive rolling function
+
+dm_apparent_temperature_percentiles
+
+dm_apparent_temperature_compiled <- merge(stations_daily_means_rolling, 
+                                  clean_names(dm_apparent_temperature_percentiles), 
+                                            by.x="shape_id", 
+                                            by.y="shape_id",
+                          all.x = TRUE)
+
+glimpse(dm_apparent_temperature_compiled)
+
+fieldsView(stations_adjusted_hourly_apparent, "01", "stations_adjusted_hourly_apparent")
+fieldsView(stations_daily_means, "02", "stations_daily_means")
+fieldsView(stations_daily_means_rolling, "03", "stations_daily_means_rolling")
+
+fieldsView(dm_apparent_temperature_percentiles, "04", "dm_apparent_temperature_percentiles")
+fieldsView(dm_apparent_temperature_compiled, "05", "dm_apparent_temperature_compiled")
+
+ObjSave(stations_adjusted_hourly_apparent,
+        stations_daily_means,
+        stations_daily_means_rolling,
+        dm_apparent_temperature_percentiles,
+        dm_apparent_temperature_compiled,
+        
+        folder = output_path)
+```
+
+
+# Compute Sheridan terms
+```{r}
+
+Sheridan <- dm_apparent_temperature_compiled %>%
+  # drop those rows with missing apparent temperature (while still can have rolling average)
+  #filter(!is.na(dm_apparent_temperature)) %>% 
+  # limit the period of analysis
+  filter(DATE < as.POSIXct("2020-01-01")) %>% 
+  mutate(EHaccl = dm_at_3_0 - dm_at_32_m3) %>%
+  
+  mutate(EH = pmax(0, (dm_at_3_0 - x95_percent))) %>% 
+  mutate(EHF = pmax(0, EH) * pmax(1, EHaccl)) %>% 
+  
+  mutate(EC = pmin(0, (dm_at_3_0 - x5_percent))) %>% 
+  mutate(ECF = -1 * pmin(0, EC) * pmin(-1, EHaccl))
+
+nrow(dm_apparent_temperature_compiled)
+nrow(Sheridan)
+
+hist(Sheridan$EHaccl)
+
+hist(Sheridan$EH)
+hist(Sheridan$EHF)
+
+hist(Sheridan$EC)
+hist(Sheridan$ECF)
+```
+
+
+# Identify extreme events
+```{r}
+EHF_percentiles <- Sheridan[ EHF > 0, 
+           c(list(median = median(EHF, na.rm = T)), 
+           as.list(round(quantile(EHF, c(.01, .02, .05, .10, .15, .25, 
+                                         .75, .85, .90, .95, .98, .99), na.rm = T),2))
+            ),
+      by = .(shape_id)] 
+
+EHF_percentiles
+ECF_percentiles <- Sheridan[ ECF < 0, 
+           c(list(median = median(ECF, na.rm = T)), 
+           as.list(round(quantile(ECF, c(.01, .02, .05, .10, .15, .25, 
+                                         .75, .85, .90, .95, .98, .99), na.rm = T),2))
+            ),
+      by = .(shape_id)]
+
+clean_names(ECF_percentiles)
+Sheridan_interim <- merge(Sheridan, 
+                           EHF_percentiles %>% setNames(paste0('EHF_', names(.))) %>% clean_names(), 
+                                            by.x="shape_id", 
+                                            by.y="ehf_shape_id",
+                          suffix  = c("", ""),
+                          all.x = TRUE)
+Sheridan_interim
+Sheridan_compiled <- merge(Sheridan_interim, 
+                           ECF_percentiles %>% setNames(paste0('ECF_', names(.))) %>% clean_names(), 
+                                            by.x="shape_id", 
+                                            by.y="ecf_shape_id",
+                          suffix  = c("", ""),
+                          all.x = TRUE)
+
+hist(EHF_percentiles$`90%`)
+hist(EHF_percentiles$`95%`)
+hist(EHF_percentiles$`99%`)
+# 
+hist(ECF_percentiles$`90%`)
+hist(ECF_percentiles$`95%`)
+hist(ECF_percentiles$`99%`)
+
+ls(Sheridan_compiled)
+
+stations_daily_means_compiled <- Sheridan_compiled %>% 
+                        mutate(EHE = case_when(EHF > ehf_85_percent ~ 1,
+                               TRUE ~ 0)) %>% 
+                        mutate(ECE = case_when(ECF < ecf_15_percent ~ 1,
+                               TRUE ~ 0))
+
+stations_daily_means_compiled
+
+stations_daily_means_compiled_sf <- st_as_sf(stations_daily_means_compiled, 
+                                   coords = c("longitude", "latitude"),
+                                   crs = spatial_projection) %>% as_tibble() %>% st_as_sf()
+
+stations_daily_means_compiled_sp <- as_Spatial(stations_daily_means_compiled_sf, 
+                        cast = TRUE)
+
+
+plot(stations_daily_means_compiled_sf[, "EHF"])
+plot(stations_daily_means_compiled_sp[, "EHF"])
+
+glimpse(stations_daily_means_compiled_sf)
+glimpse(stations_daily_means_compiled_sp@data)
+
+# makeDataReport(stations_daily_means_compiled, 
+#                output = "html",
+#                replace = TRUE)
+
+```
+
+
+## Label consecutive heat/cold days
+```{r}
+EHE <- stations_daily_means_compiled[, .(EHE = EHE[1], 
+                       DATE = DATE, 
+                       Month = lubridate::month(DATE),
+                       Week = isoweek(DATE),
+                       Day = yday(DATE),
+                       EHF = EHF,
+                       EHMI = EHF * .N,
+                       DM_apparent_temperature = dm_apparent_temperature,
+                       EHE_day = cumsum(rleidv(EHE)),
+                       EHE_duration = .N,
+                       EHE_start = first(DATE), 
+                       EHE_end = last(DATE),
+                       Longitude = longitude,
+                       Latitude = latitude,
+                       Event_Type = "Extreme Heat Event"
+                       ),
+      by = .(shape_id, rleidv(EHE))][EHE == 1][, c('EHE', 'rleidv') := NULL][]%>% 
+      mutate(UID = paste0(strftime(EHE_start, format = "%Y%m%d"),
+                          "1"
+                          ))
+
+ECE <- stations_daily_means_compiled[, .(ECE = ECE[1], 
+                       DATE = DATE,
+                       Month = lubridate::month(DATE),
+                       Week = isoweek(DATE),
+                       Day = yday(DATE),
+                       ECF = ECF,
+                       ECMI = ECF * .N,
+                       DM_apparent_temperature = dm_apparent_temperature,
+                       ECE_day = cumsum(rleidv(ECE)),
+                       ECE_duration = .N,
+                       ECE_start = first(DATE), 
+                       ECE_end = last(DATE),
+                       Longitude = longitude,
+                       Latitude = latitude, 
+                       Event_Type = "Extreme Cold Event"
+                       ),
+      by = .(shape_id, rleidv(ECE))][ECE == 1][, c('ECE', 'rleidv') := NULL][] %>% 
+      mutate(UID = paste0(strftime(ECE_start, format = "%Y%m%d"),
+                          "2"
+                          ))
+```
+
+
+# Set the cases tudy period (i.e. One Year)
+```{r}
+# construct table row by row
+EHE_ECE <- full_join(EHE, 
+                     ECE, 
+                                            by.x=c("shape_id", "DATE"), 
+                                            by.y=c("shape_id", "DATE"), ,
+                          all = TRUE)
+
+# to be used for stats that requires to preserve null values
+EHE_ECE_compiled <- merge(stations_daily_means_rolling %>% 
+                          filter(DATE < as.POSIXct("2020-01-01")), 
+                          
+                          EHE_ECE, 
+                                            by.x=c("shape_id", "DATE"), 
+                                            by.y=c("shape_id", "DATE"), ,
+                          all.x = TRUE) %>% 
+  mutate_at(vars(Event_Type), ~replace_na(., "Non-Extreme Weather")) 
+
+# To be used for raster creation that requires non-null values
+EHE_ECE_compiled_null2zero <- EHE_ECE_compiled %>% 
+  mutate_at(vars(ECE_duration, EHE_duration,
+                 EHF, EHMI,
+                 ECF, ECMI,
+                 ), ~replace_na(., 0))
+
+  #https://stackoverflow.com/a/55291983
+
+makeDataReport(EHE_ECE_compiled, 
+                output = "html",
+                replace = TRUE)
+
+EHE_ECE_compiled_skim_report <- skim(EHE_ECE_compiled) %>% 
+     arrange(complete_rate)
+
+EHE_ECE_compiled_skim_report
+
+ls(EHE_ECE_compiled)
+```
+
+
+# Stats
+```{r}
+EHE_ECE_Aggregate_Annual_Stats <- EHE_ECE_compiled %>% group_by(Event_Type) %>% 
+  summarise(Number_of_Records = n(),
+            Distinct_Stations = n_distinct(shape_id),
+            
+            Average_EHE_Duration = round(mean(EHE_duration, na.rm = TRUE), 2),
+            Max_EHE_Duration = max(EHE_duration, na.rm = TRUE),
+            Average_EHF = round(mean(EHF, na.rm = TRUE), 1),
+            Max_EHF = round(max(EHF, na.rm = TRUE), 1),
+
+            Average_EHMI = round(mean(EHMI, na.rm = TRUE), 1),
+            Max_EHMI = round(max(EHMI, na.rm = TRUE), 1),
+
+            Average_ECE_Duration = round(mean(ECE_duration, na.rm = TRUE), 2),
+            Max_ECE_Duration = max(ECE_duration, na.rm = TRUE),
+            Average_ECF = round(mean(ECF, na.rm = TRUE), 1),
+            Min_ECF = round(min(ECF, na.rm = TRUE), 1),
+
+            Average_ECMI = round(mean(ECMI, na.rm = TRUE), 1),
+            Min_ECMI = round(min(ECMI, na.rm = TRUE), 1),
+
+            Average_AT = round(mean(dm_apparent_temperature, na.rm = TRUE),2),
+            Min_AT = min(dm_apparent_temperature, na.rm = TRUE),
+            Max_AT = max(dm_apparent_temperature, na.rm = TRUE),
+            Median_AT = round(median(dm_apparent_temperature, na.rm = TRUE), 2)
+            )
+          # Parcels_Total_Area_per_Zone = sum((!!area_field)),
+          # Parcels_Mean_Area_per_Zone = mean(!!area_field, na.rm = TRUE)) %>%
+
+EHE_ECE_Aggregate_Monthtly_Stats <- EHE_ECE_compiled %>% group_by(Event_Type, Month) %>% 
+  summarise(Number_of_Records = n(),
+            Distinct_Stations = n_distinct(shape_id),
+            
+            Average_EHE_Duration = round(mean(EHE_duration, na.rm = TRUE), 2),
+            Max_EHE_Duration = max(EHE_duration, na.rm = TRUE),
+            Average_EHF = round(mean(EHF, na.rm = TRUE), 1),
+            Max_EHF = round(max(EHF, na.rm = TRUE), 1),
+
+            Average_EHMI = round(mean(EHMI, na.rm = TRUE), 1),
+            Max_EHMI = round(max(EHMI, na.rm = TRUE), 1),
+
+            Average_ECE_Duration = round(mean(ECE_duration, na.rm = TRUE), 2),
+            Max_ECE_Duration = max(ECE_duration, na.rm = TRUE),
+            Average_ECF = round(mean(ECF, na.rm = TRUE), 1),
+            Min_ECF = round(min(ECF, na.rm = TRUE), 1),
+
+            Average_ECMI = round(mean(ECMI, na.rm = TRUE), 1),
+            Min_ECMI = round(min(ECMI, na.rm = TRUE), 1),
+
+            Average_AT = round(mean(dm_apparent_temperature, na.rm = TRUE),2),
+            Min_AT = min(dm_apparent_temperature, na.rm = TRUE),
+            Max_AT = max(dm_apparent_temperature, na.rm = TRUE),
+            Median_AT = round(median(dm_apparent_temperature, na.rm = TRUE), 2)
+            )
+
+EHE_ECE_Stations_Stats <- EHE_ECE_compiled %>% group_by(shape_id, Event_Type) %>% 
+  summarise(Number_of_Records = n(),
+            Distinct_Events = n_distinct(UID),
+
+            Average_EHE_Duration = round(mean(EHE_duration, na.rm = TRUE), 2),
+            Max_EHE_Duration = max(EHE_duration, na.rm = TRUE),
+            Average_EHF = round(mean(EHF, na.rm = TRUE), 1),
+            Max_EHF = round(max(EHF, na.rm = TRUE), 1),
+
+            Average_EHMI = round(mean(EHMI, na.rm = TRUE), 1),
+            Max_EHMI = round(max(EHMI, na.rm = TRUE), 1),
+
+            Average_ECE_Duration = round(mean(ECE_duration, na.rm = TRUE), 2),
+            Max_ECE_Duration = max(ECE_duration, na.rm = TRUE),
+            Average_ECF = round(mean(ECF, na.rm = TRUE), 1),
+            Min_ECF = round(min(ECF, na.rm = TRUE), 1),
+
+            Average_ECMI = round(mean(ECMI, na.rm = TRUE), 1),
+            Min_ECMI = round(min(ECMI, na.rm = TRUE), 1),
+
+            Average_AT = round(mean(dm_apparent_temperature, na.rm = TRUE),2),
+            Min_AT = min(dm_apparent_temperature, na.rm = TRUE),
+            Max_AT = max(dm_apparent_temperature, na.rm = TRUE),
+            Median_AT = round(median(dm_apparent_temperature, na.rm = TRUE), 2)
+            )
+
+write.csv(EHE_ECE_Aggregate_Annual_Stats, 
+          paste0(output_path, "/", 
+                 deparse(substitute(EHE_ECE_Aggregate_Annual_Stats)), 
+                 "_2019", 
+                 ".csv"), 
+          row.names = FALSE, )
+
+write.csv(EHE_ECE_Aggregate_Monthtly_Stats, 
+          paste0(output_path, "/", 
+                 deparse(substitute(EHE_ECE_Aggregate_Monthtly_Stats)), 
+                 "_2019", 
+                 ".csv"), 
+          row.names = FALSE, )
+
+write.csv(EHE_ECE_Stations_Stats, 
+          paste0(output_path, "/", 
+                 deparse(substitute(EHE_ECE_Stations_Stats)), 
+                 "_2019", 
+                 ".csv"), 
+          row.names = FALSE, )
+```
+
+
+# Export data objects as RDS files
+```{r}
+ObjSave(EHE,
+        ECE,
+        Sheridan_compiled,
+        EHF_percentiles,
+        ECF_percentiles,
+        dm_apparent_temperature_percentiles,
+        EHE_ECE,
+        EHE_ECE_compiled,
+        
+        folder = output_path)
+
+fieldsView(Sheridan, "10", "Sheridan")
+fieldsView(Sheridan_interim, "11", "Sheridan_interim")
+fieldsView(Sheridan_compiled, "12", "Sheridan_compiled")
+
+
+write.csv(dm_apparent_temperature_percentiles, 
+          paste0(output_path, "/", 
+                 deparse(substitute(dm_apparent_temperature_percentiles)), 
+                 "_2019_", 
+                 nrow(dm_apparent_temperature_percentiles), 
+                 "stations", 
+                 ".csv"), 
+          row.names = FALSE, )
+
+write.csv(EHF_percentiles, 
+          paste0(output_path, "/", 
+                 deparse(substitute(EHF_percentiles)), 
+                 "_2019_", 
+                 nrow(EHF_percentiles), 
+                 "stations", 
+                 ".csv"), 
+          row.names = FALSE, )
+
+write.csv(ECF_percentiles, 
+          paste0(output_path, "/", 
+                 deparse(substitute(ECF_percentiles)), 
+                 "_2019_", 
+                 nrow(ECF_percentiles), 
+                 "stations", 
+                 ".csv"), 
+          row.names = FALSE, )
+
+write.csv(ECE, 
+          paste0(output_path, "/", 
+                 deparse(substitute(ECE)), 
+                 "_2019_", 
+                 nrow(ECE), 
+                 "station_x_day" , 
+                 ".csv"), 
+          row.names = FALSE, )
+
+write.csv(EHE, 
+          paste0(output_path, "/", 
+                 deparse(substitute(EHE)), 
+                 "_2019_", 
+                 nrow(EHE), 
+                 "station_x_day" , 
+                 ".csv"), 
+          row.names = FALSE, )
+
+write.csv(EHE_ECE, 
+          paste0(output_path, "/", 
+                 deparse(substitute(EHE_ECE)), 
+                 "_2019_", 
+                 nrow(EHE_ECE), 
+                 "station_x_day" , 
+                 ".csv"), 
+          row.names = FALSE, )
+```
