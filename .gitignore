@@ -2,7 +2,6 @@
 .Rhistory
 .RData
 renv/library
-*.html
 *.htm
 *.doc*
 *.ppt*

@@ -246,13 +246,6 @@ dm_apparent_temperature_compiled <- merge(stations_daily_means_rolling,
 
 glimpse(dm_apparent_temperature_compiled)
 
-fieldsView(stations_adjusted_hourly_apparent, "01", "stations_adjusted_hourly_apparent")
-fieldsView(stations_daily_means, "02", "stations_daily_means")
-fieldsView(stations_daily_means_rolling, "03", "stations_daily_means_rolling")
-
-fieldsView(dm_apparent_temperature_percentiles, "04", "dm_apparent_temperature_percentiles")
-fieldsView(dm_apparent_temperature_compiled, "05", "dm_apparent_temperature_compiled")
-
 ObjSave(stations_adjusted_hourly_apparent,
         stations_daily_means,
         stations_daily_means_rolling,
@@ -265,11 +258,11 @@ ObjSave(stations_adjusted_hourly_apparent,
 
 # Compute Sheridan terms
 ```{r}
-
 Sheridan <- dm_apparent_temperature_compiled %>%
   # drop those rows with missing apparent temperature (while still can have rolling average)
   #filter(!is.na(dm_apparent_temperature)) %>% 
-  # limit the period of analysis
+  
+  # set the period of analysis
   filter(DATE < as.POSIXct("2020-01-01")) %>% 
   mutate(EHaccl = dm_at_3_0 - dm_at_32_m3) %>%
   
@@ -359,7 +352,6 @@ glimpse(stations_daily_means_compiled_sp@data)
 # makeDataReport(stations_daily_means_compiled, 
 #                output = "html",
 #                replace = TRUE)
-
 ```
 
 
@@ -567,10 +559,6 @@ ObjSave(EHE,
         EHE_ECE_compiled,
         
         folder = output_path)
-
-fieldsView(Sheridan, "10", "Sheridan")
-fieldsView(Sheridan_interim, "11", "Sheridan_interim")
-fieldsView(Sheridan_compiled, "12", "Sheridan_compiled")
 
 
 write.csv(dm_apparent_temperature_percentiles, 
