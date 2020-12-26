@@ -1,6 +1,6 @@
 ---
 title: "Spatiotemporal Delineation of Extreme Heat/Cold Events"
-subtitle: "Data Retrieval Script"
+subtitle: "Data Retrieval"
 author:
 - affiliation: University of Waterloo
   email: pfard@uwaterloo.ca
@@ -44,7 +44,7 @@ library(here)
 
 spatial_projection  = 4269 #NAD83
 
-project_name <- "Data_from_EDW_"
+project_name <- "EDW_Data_Retrieval_"
 
 input_dir <- "data"
 

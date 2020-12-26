@@ -1,6 +1,6 @@
 ---
 title: "Spatiotemporal Delineation of Extreme Heat/Cold Events"
-subtitle: "Events Detection"
+subtitle: "Extreme Events Detection"
 author:
 - affiliation: University of Waterloo
   email: pfard@uwaterloo.ca
@@ -39,7 +39,7 @@ knitr::opts_chunk$set(results = "hold",
 
 
 # I/O Setup
-```{r set IO parameters}
+```{r set IO parameters, include=FALSE}
 library(here)
 
 spatial_projection  = 4269 #NAD83
@@ -557,6 +557,7 @@ ObjSave(EHE,
         dm_apparent_temperature_percentiles,
         EHE_ECE,
         EHE_ECE_compiled,
+        EHE_ECE_compiled_null2zero,
         
         folder = output_path)
 

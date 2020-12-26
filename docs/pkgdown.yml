@@ -1,6 +1,7 @@
 pandoc: 2.7.3
 pkgdown: 1.6.1
 pkgdown_sha: ~
-articles: {}
-last_built: 2020-12-19T20:32Z
+articles:
+  Extreme Events Visualization: Extreme Events Visualization.html
+last_built: 2020-12-26T06:43Z
 
