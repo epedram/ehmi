@@ -4,4 +4,4 @@ Extreme climate events are increasingly identified as a significant factor for h
 
 This repository provides the computation R code we developed to conduct a preliminary study.
 
-More information and summary of our preliminary analysis is accessible at https://github.com/epedram/ehmi.
+More information and summary of our preliminary analysis is accessible at https://epedram.github.io/ehmi.
