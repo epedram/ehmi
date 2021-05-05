@@ -47,3 +47,58 @@ FixColNames <- function(df, prefix="", suffix="", sep="_")
   return(df)
 }
 
+
+# f(x): Write a csv file (with added row numbers) on a certain folder
+fx_saveCSV <- function(x, folder = output_path,
+                       prefix = "", suffix = ""){
+  write.csv(x,
+            paste0(folder, "/",
+                   prefix, #"_",
+                   substitute(x), "_",
+                   suffix, #"_",
+                   nrow(x), "x",
+                   length(x),
+                   ".csv"),
+            row.names = TRUE, )
+}
+
+
+# f(x): Append to a csv file (with same number of columns) on a certain folder
+fx_appendCSV <- function(x, folder = output_path,
+                         prefix = "", suffix = ""){
+  table_path <-
+    paste0(folder, "/",
+           prefix, #"_",
+           substitute(x), "_",
+           suffix, "_",
+           length(x),
+           "_columns",
+           ".csv")
+  write.table(x, table_path,
+              sep = ",", row.names = FALSE,
+              col.names = !file.exists(table_path),
+              append = T)
+}
+
+
+# f(x): Write a shapefile (with a subfolder) on a certain folder
+
+fx_saveSHP <- function(sf, folder = "output_path",
+                       shpname = "shapefile",
+                       prefix = "", suffix = "",
+                       subfolder = "spatial_layer"
+){
+  writeOGR(as_Spatial(sf,
+                      cast = TRUE),
+           layer = paste0(prefix,
+                          shpname,
+                          "_n", nrow(sf)
+           ),
+           dsn = paste0(folder, "/",
+                        subfolder,
+                        suffix
+           ),
+           driver = "ESRI Shapefile",
+           layer_options ="wkbPolygon",
+           verbose = FALSE, delete_dsn = TRUE, overwrite_layer = TRUE)
+}
