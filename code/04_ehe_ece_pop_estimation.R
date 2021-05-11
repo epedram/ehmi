@@ -378,6 +378,8 @@ if (selected_day %in% EHE_DATES[[2]])
     mutate(DATE = as.Date(selected_day, "%a, %d %b %Y")) %>%
     mutate(Estimated_Level = round(Estimated_Level, 2))
 
+  st_crs(rm_sf) <- spatial_projection
+  print(st_crs(rm_sf)$epsg)
 
   EHE_Vectorized_Grid_daily <- rm_sf %>% filter(Estimated_Level > ehe_threshold) %>%
     mutate(computed_area = round(as.numeric(st_area(.)), 2)) %>%
