@@ -189,6 +189,8 @@ EHE_ECE_compiled_sf <- st_as_sf(EHE_ECE_compiled_null2zero,
                                    coords = c("longitude", "latitude"),
                                    crs = spatial_projection) %>% as_tibble() %>% st_as_sf()
 
+st_crs(EHE_ECE_compiled_sf) <- spatial_projection
+print(st_crs(EHE_ECE_compiled_sf)$epsg)
 
 EHE_selected_period_geo <- EHE_ECE_compiled_sf %>%
                 filter(DATE >= start_date & DATE <= end_date) %>%
@@ -420,6 +422,9 @@ if (selected_day %in% EHE_DATES[[2]])
 
   EHE_Contours_daily <- st_as_sf(r2c,
                 crs = spatial_projection)
+
+  st_crs(EHE_Contours_daily) <- spatial_projection
+  print(st_crs(EHE_Contours_daily)$epsg)
 
   ## Visualization
   interpolated_EHE_plot <-  ggplot() +
