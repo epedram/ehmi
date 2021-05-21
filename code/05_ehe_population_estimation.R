@@ -178,7 +178,7 @@ CA_blocks_compiled <- CA_blocks_joined_stations %>%
 ##```{r}
 
 ### Dates ----
-#start_date <- as.Date("2019-08-20",format="%Y-%m-%d")
+#start_date <- as.Date("2019-08-27",format="%Y-%m-%d")
 #end_date   <- as.Date("2019-08-30",format="%Y-%m-%d")
 
 EHE_ECE_compiled_null2zero <- EHE_ECE_compiled %>%
@@ -349,6 +349,7 @@ if (selected_day %in% EHE_DATES[[2]])
                   filter(DATE == selected_day),
                           cast = TRUE)
   print(selected_day)
+  print("interpolating temperature surface")
 
   # Replace point boundary extent with that of the state
   P@bbox <- W@bbox
@@ -362,6 +363,7 @@ if (selected_day %in% EHE_DATES[[2]])
   fullgrid(grd)    <- TRUE  # Create SpatialGrid object
 
   # Add P's projection information to the empty grid
+  proj4string(P) <- proj4string(P)
   proj4string(grd) <- proj4string(P)
 
   # Interpolate the grid cells using a power value of 2 (idp=2.0)
