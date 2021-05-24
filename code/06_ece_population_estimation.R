@@ -179,7 +179,7 @@ CA_blocks_compiled <- CA_blocks_joined_stations %>%
 
 ### Dates ----
 #start_date <- as.Date("2019-01-01",format="%Y-%m-%d")
-#end_date   <- as.Date("2019-01-05",format="%Y-%m-%d")
+#end_date   <- as.Date("2019-01-15",format="%Y-%m-%d")
 
 EHE_ECE_compiled_null2zero <- EHE_ECE_compiled %>%
   mutate_at(vars(EHE_duration, ECE_duration,
@@ -212,6 +212,51 @@ CA_blocks_compiled_ECE <- merge(CA_blocks_compiled,
 # Compute statistical summaries ----
 ## Estimate impacted population based on the nearest station to census blocks----
 ##```{r}
+CA_ECE_Summary <- ECE_selected_period_geo %>% st_drop_geometry() %>%
+  summarise(
+    Number_of_Extreme_Events_n = n(),
+    Number_of_Distionct_Days_n = n_distinct(DATE, na.rm = TRUE),
+
+    Max_Duration = max(ECE_duration),
+    Avg_Duration = round(mean(ECE_duration, na.rm = TRUE), 3))
+
+
+fx_saveCSV(CA_ECE_Summary, output_path,
+           prefix = "50_", suffix = "2019_")
+
+### Monthly boxplot ----
+multipanel_boxplots <-
+  ggplot(ECE_selected_period_geo %>% st_drop_geometry(),
+         aes(x = ECE_duration,
+             y = Month,
+             group = Month)) +
+  geom_boxplot()+
+  guides(x =  guide_axis(angle = 0)) +
+
+  coord_flip() +
+  theme(legend.position = "none") +
+  labs(x = "Events Duration",
+       y = "Month") +
+  labs(title = paste0("Monthly Distribution of Extreme Cold Events"
+                      #"State of California ",
+  )) +
+  labs(subtitle = paste0("State of California ",
+                         "2019"
+  )) + theme_classic()
+
+#print(multipanel_boxplots)
+plot_file_name <- paste0(output_path,
+                         "/ECE_",
+                         "Boxplot_by_",
+                         "Month",
+                         ".jpg")
+
+ggsave(plot_file_name,
+       plot = multipanel_boxplots,
+       dpi = 300,
+       width = 12, height = 12, units = "cm")
+
+
 CA_impacted_stations <- EHE_ECE_compiled_sf %>%
   filter(!is.na(DATE)) %>%
   filter(ECE_duration >= 1) %>% st_drop_geometry() %>%
@@ -635,9 +680,23 @@ dim(cumulative_interpolated_idw)
 ##```
 
 ##```{r}
+str(cumulative_interpolated_idw@data)
+#glimpse(cumulative_interpolated_idw@data)
+
+# cumulative_interpolated_idw <- readRDS(here(input_dir,
+#                                  "ece_cumulative_interpolated_idw.rds"))[[1]]
+length(cumulative_interpolated_idw[cumulative_interpolated_idw])
+length(cumulative_interpolated_idw[cumulative_interpolated_idw > 1])
+length(cumulative_interpolated_idw[cumulative_interpolated_idw < 1])
+length(cumulative_interpolated_idw[cumulative_interpolated_idw == 1])
+cumulative_ece_coverage <- 100 * round(
+(length(cumulative_interpolated_idw[cumulative_interpolated_idw < 1]) / length(cumulative_interpolated_idw[cumulative_interpolated_idw]))
+,4)
+
 plot_file_name <- paste0(output_path, "/_ECE_",
-                         "00_cumulative_interpolated_idw",
-                         ".jpg")
+                         "00_cumulative_interpolated_idw_",
+                         cumulative_ece_coverage,
+                         "_percent.jpg")
 
 jpeg(plot_file_name, width = 880, height = 1200)
 
@@ -647,8 +706,9 @@ dev.off()
 
 
 plot_file_name <- paste0(output_path, "/_ECE_",
-                         "01_cumulative_interpolated_idw",
-                         ".jpg")
+                         "01_cumulative_interpolated_idw_",
+                         cumulative_ece_coverage,
+                         "_percent.jpg")
 
 jpeg(plot_file_name, width = 880, height = 1200)
 
@@ -656,18 +716,6 @@ print(spplot(cumulative_interpolated_idw))
 
 dev.off()
 
-
-str(cumulative_interpolated_idw@data)
-#glimpse(cumulative_interpolated_idw@data)
-
-length(cumulative_interpolated_idw[cumulative_interpolated_idw > 0])
-length(cumulative_interpolated_idw[cumulative_interpolated_idw < 0])
-length(cumulative_interpolated_idw[cumulative_interpolated_idw == 1])
-
-length(cumulative_interpolated_idw[cumulative_interpolated_idw < 1]) / length(cumulative_interpolated_idw[cumulative_interpolated_idw > 0])
-
-length(cumulative_interpolated_idw[cumulative_interpolated_idw > 1]) /
-  length(cumulative_interpolated_idw[cumulative_interpolated_idw > 0])
 ##```
 
 ### Export spatial objects ----
@@ -727,16 +775,45 @@ CA_blocks_joined_both <- merge(CA_blocks_joined_ECE[c("DATE", "GEOID_block", "Es
                                     Estimated_Level < 0
                                   ~ "Interpolated Surface",
 
-                                  TRUE ~ "Nearest Station")))
+                                  TRUE ~ "Nearest Station"))) %>%
+  mutate(classification_result =
+           as.character(case_when(Identified_Method == "Both"
+                                  ~ "Methods Agreement",
 
-CA_blocks_joined_both_Sf <- merge(CA_blocks_compiled,
+                                  TRUE ~ "Methods Disagreement")))
+
+CA_blocks_joined_both_sf <- merge(CA_blocks_compiled,
                                   CA_blocks_joined_both %>% st_drop_geometry(),
                                   by.x=c("GEOID_block"),
                                   by.y=c("GEOID_block"),
                                   all = TRUE) %>%
   st_as_sf() %>% as_tibble() %>% st_as_sf()
 
-CA_impacted_blocks_population_comparison_daily <- CA_blocks_joined_both_Sf %>%
+#### Misclassification stats ----
+CA_blocks_joined_both_df <- CA_blocks_joined_both_sf %>%
+  st_drop_geometry() %>% filter(!is.na(DATE))
+
+CA_impacted_block_groups_identified <- CA_blocks_joined_both_df %>%
+  group_by(
+    GEOID_block) %>%
+  summarise(
+    total_number_identified = n())
+
+CA_impacted_block_groups_identified_method <- CA_blocks_joined_both_df %>%
+  group_by(
+    GEOID_block, Identified_Method, classification_result) %>%
+  summarise(
+    number_identified_by_method = n())
+
+CA_impacted_block_groups_method_comparison <- merge(CA_impacted_block_groups_identified_method,
+                                                    CA_impacted_block_groups_identified,
+                                                    by.x=c("GEOID_block"),
+                                                    by.y=c("GEOID_block"),
+                                                    all.x = TRUE) %>%
+  mutate(percentage_to_total_identified_events = round(100 * (number_identified_by_method/total_number_identified), 1)) %>%
+  arrange(desc(total_number_identified), GEOID_block)
+
+CA_impacted_blocks_population_comparison_daily <- CA_blocks_joined_both_sf %>%
   st_drop_geometry() %>%
   filter(!is.na(DATE)) %>%
   group_by(
@@ -749,7 +826,7 @@ CA_impacted_blocks_population_comparison_daily <- CA_blocks_joined_both_Sf %>%
   mutate(ratio_to_total_impacted = impacted_blocks_population / sum(impacted_blocks_population)) %>%
   mutate(ratio_to_total_impacted_txt = paste0(sprintf("%.1f", ratio_to_total_impacted * 100), "%"))
 
-CA_impacted_blocks_population_comparison <- CA_blocks_joined_both_Sf %>%
+CA_impacted_blocks_population_comparison <- CA_blocks_joined_both_sf %>%
   st_drop_geometry() %>%
   filter(!is.na(DATE)) %>%
   group_by(
@@ -761,6 +838,9 @@ CA_impacted_blocks_population_comparison <- CA_blocks_joined_both_Sf %>%
   mutate(percent_impacted_txt = paste0(sprintf("%.1f", percent_impacted * 100), "%")) %>%
   mutate(ratio_to_total_impacted = impacted_blocks_population / sum(impacted_blocks_population)) %>%
   mutate(ratio_to_total_impacted_txt = paste0(sprintf("%.1f", ratio_to_total_impacted * 100), "%"))
+
+fx_saveCSV(CA_impacted_block_groups_method_comparison, output_path,
+           prefix = "80_", suffix = "block_group_level_")
 
 fx_saveCSV(CA_impacted_blocks_population_comparison_daily, output_path,
            prefix = "81_", suffix = "")
@@ -778,12 +858,12 @@ while (selected_day <= end_date)
 if (selected_day %in% ECE_DATES[[2]])
   {
 
-  CA_blocks_joined_both_Sf_day <- CA_blocks_joined_both_Sf %>%
+  CA_blocks_joined_both_sf_day <- CA_blocks_joined_both_sf %>%
     filter(DATE == selected_day)
 
   Census_Blocks_Both <-  ggplot() +
 
-    geom_sf(data = CA_blocks_joined_both_Sf_day,
+    geom_sf(data = CA_blocks_joined_both_sf_day,
             color = NA,
             aes(
               fill = Identified_Method,
@@ -830,3 +910,15 @@ if (selected_day %in% ECE_DATES[[2]])
   }
 }
 ##```
+
+
+
+ObjSave(
+  CA_blocks_joined_both_sf,
+
+  cumulative_interpolated_idw,
+  stacked_interpolated_idw,
+  stacked_interpolated_idw_rb,
+
+  folder = rds_output_path)
+
