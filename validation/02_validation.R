@@ -84,14 +84,14 @@ noaa_stations_climate_dt <- readRDS(here(input_dir,
   filter(!is.na(dm_apparent_temperature))
 
 
-CA_voronoi_polygons_sf <- readRDS(here(input_dir,
-                                 "CA_voronoi_polygons_sf.rds"))[[1]]
-
-SCA_voronoi_polygons_sf <- readRDS(here(input_dir,
-                                 "SCA_voronoi_polygons_sf.rds"))[[1]]
-
-CA_fixed_grid_sf <- readRDS(here(input_dir,
-                                 "CA_fixed_grid_sf.rds"))[[1]]
+# CA_voronoi_polygons_sf <- readRDS(here(input_dir,
+#                                  "CA_voronoi_polygons_sf.rds"))[[1]]
+#
+# SCA_voronoi_polygons_sf <- readRDS(here(input_dir,
+#                                  "SCA_voronoi_polygons_sf.rds"))[[1]]
+#
+# CA_fixed_grid_sf <- readRDS(here(input_dir,
+#                                  "CA_fixed_grid_sf.rds"))[[1]]
 
 CA_counties_sf <- readRDS(here(input_dir,
                                  "CA_counties_sf_ACS2019.rds"))[[1]]
@@ -99,11 +99,11 @@ CA_counties_sf <- readRDS(here(input_dir,
 CA_tracts_sf <- readRDS(here(input_dir,
                                  "CA_tracts_sf_ACS2019.rds"))[[1]]
 
-CA_blocks_sf <- readRDS(here(input_dir,
-                                 "CA_blocks_sf_ACS2019.rds"))[[1]]
-
-CA_zipcodes_sf <- readRDS(here(input_dir,
-                                  "CA_zipcodes_sf_ACS2019.rds"))[[1]]
+# CA_blocks_sf <- readRDS(here(input_dir,
+#                                  "CA_blocks_sf_ACS2019.rds"))[[1]]
+#
+# CA_zipcodes_sf <- readRDS(here(input_dir,
+#                                   "CA_zipcodes_sf_ACS2019.rds"))[[1]]
 
 EHE <- readRDS(here(input_dir,
                                  "EHE.rds"))[[1]]
@@ -133,8 +133,8 @@ SCA_counties_sf <- CA_counties_sf %>%
 SCA_tracts_sf <- CA_tracts_sf %>%
   filter(NAME %in% SCA_counties_sf_name)
 
-SCA_blocks_sf <- CA_blocks_sf %>%
-  filter(NAME %in% SCA_counties_sf_name)
+# SCA_blocks_sf <- CA_blocks_sf %>%
+#   filter(NAME %in% SCA_counties_sf_name)
 
 # set zoom
 xlim_sca = st_bbox(SCA_counties_sf)[c(1,3)]
@@ -151,20 +151,20 @@ sp_points <- as_Spatial(noaa_points_sf[c("shape_id", "NAME")],
                         cast = TRUE)
 
 
-CA_blocks_joined_stations <- st_join(CA_blocks_sf,
-                             CA_voronoi_polygons_sf,
-                             join = join_type,
-                             left = TRUE,
-                             largest = TRUE) %>%
-                          st_as_sf() %>% as_tibble() %>% st_as_sf()
-
-
-CA_blocks_compiled <- CA_blocks_joined_stations %>%
-                              dplyr::select(
-                              !starts_with("popM_block") &
-                              !starts_with("NAME_block")
-                              ) %>%
-                              filter(!is.na(shape_id))
+# CA_blocks_joined_stations <- st_join(CA_blocks_sf,
+#                              CA_voronoi_polygons_sf,
+#                              join = join_type,
+#                              left = TRUE,
+#                              largest = TRUE) %>%
+#                           st_as_sf() %>% as_tibble() %>% st_as_sf()
+#
+#
+# CA_blocks_compiled <- CA_blocks_joined_stations %>%
+#                               dplyr::select(
+#                               !starts_with("popM_block") &
+#                               !starts_with("NAME_block")
+#                               ) %>%
+#                               filter(!is.na(shape_id))
 ##```
 
 ##```{r}
@@ -192,12 +192,12 @@ EHE_DATES <- EHE_selected_period_geo[c("EHE_duration", "DATE")] %>%
   filter(EHE_duration >= 1)
 length(unique(EHE_DATES$DATE))
 
-CA_blocks_compiled_EHE <- merge(CA_blocks_compiled,
-                                     EHE_selected_period_geo %>% st_drop_geometry(),
-                                     by.x=c("shape_id"),
-                                     by.y=c("shape_id"),
-                                     all.x = TRUE) %>%
-                      st_as_sf() %>% as_tibble() %>% st_as_sf()
+# CA_blocks_compiled_EHE <- merge(CA_blocks_compiled,
+#                                      EHE_selected_period_geo %>% st_drop_geometry(),
+#                                      by.x=c("shape_id"),
+#                                      by.y=c("shape_id"),
+#                                      all.x = TRUE) %>%
+#                       st_as_sf() %>% as_tibble() %>% st_as_sf()
 ##```
 
 

@@ -125,10 +125,10 @@ fx_saveCSV(validation_stations_points_dtsf,
            prefix = paste0("sample_", counter, "_"),
            suffix = "")
 
-fx_fieldsView(validation_stations_climate_dtsf %>% st_drop_geometry(),
-              output_path = rds_output_path,
-              paste0("04_sample_", counter),
-              "validation_stations_climate_dtsf")
+# fx_fieldsView(validation_stations_climate_dtsf %>% st_drop_geometry(),
+#               output_path = rds_output_path,
+#               paste0("04_sample_", counter),
+#               "validation_stations_climate_dtsf")
 
 fx_saveSHP(ca_test_set_voronoi_dtsf, folder = sample_output_path,
            shpname = "ca_test_set_voronoi",
@@ -226,44 +226,44 @@ while (selected_day <= end_date)
 
   interpolated_idw_raster_masked   <-   mask(interpolated_idw_raster, W)
 
-  ## Convert raster into SP and SF objects for visualization ----
-  interpolated_idw_raster_masked_sp <- as(interpolated_idw_raster_masked,'SpatialPolygonsDataFrame')
-  interpolated_idw_raster_masked_sf <- st_as_sf(interpolated_idw_raster_masked_sp,
-                                                crs = spatial_projection) %>%
-    rename_at(vars(contains("var1.pred")), ~"Estimated_Level") %>%
-    mutate(DATE = as.Date(selected_day, "%a, %d %b %Y")) %>%
-    mutate(Estimated_Level = round(Estimated_Level, 2))
-
-  st_crs(interpolated_idw_raster_masked_sf) <- spatial_projection
-  print(st_crs(interpolated_idw_raster_masked_sf)$epsg)
-
-
-  ## Compile the selected day DF ----
-  AT_Vectorized_Grid_daily <- interpolated_idw_raster_masked_sf %>%
-    #filter(Estimated_Level > AT_threshold) %>%
-    mutate(computed_area = round(as.numeric(st_area(.)), 1)) %>%
-    mutate(area_hectare = round((computed_area / 10000), 2)) %>%
-    mutate(DATE = selected_day)
+  # ## Convert raster into SP and SF objects for visualization ----
+  # interpolated_idw_raster_masked_sp <- as(interpolated_idw_raster_masked,'SpatialPolygonsDataFrame')
+  # interpolated_idw_raster_masked_sf <- st_as_sf(interpolated_idw_raster_masked_sp,
+  #                                               crs = spatial_projection) %>%
+  #   rename_at(vars(contains("var1.pred")), ~"Estimated_Level") %>%
+  #   mutate(DATE = as.Date(selected_day, "%a, %d %b %Y")) %>%
+  #   mutate(Estimated_Level = round(Estimated_Level, 2))
+  #
+  # st_crs(interpolated_idw_raster_masked_sf) <- spatial_projection
+  # print(st_crs(interpolated_idw_raster_masked_sf)$epsg)
 
 
-  AT_Boundaries_daily <- AT_Vectorized_Grid_daily %>%
-    st_union(.) %>% as_tibble() %>% st_as_sf() %>%
-    #mutate(event_type = "EHE") %>%
-    mutate(Estimated_Level = 1) %>%
-    mutate(computed_area = round(as.numeric(st_area(.)), 1)) %>%
-    mutate(area_hectare = round((computed_area / 10000), 2)) %>%
-    mutate(DATE = selected_day)
-
-
-  blocks_joined_AT_daily <- st_join(
-    CA_blocks_compiled,
-    AT_Boundaries_daily,
-
-    join = st_intersects,
-    suffix = c("", "_GIS"),
-    left = FALSE) %>%
-    mutate(DATE = as.Date(selected_day, "%a, %d %b %Y")) %>%
-    st_as_sf() %>% as_tibble() %>% st_as_sf()
+  # ## Compile the selected day DF ----
+  # AT_Vectorized_Grid_daily <- interpolated_idw_raster_masked_sf %>%
+  #   #filter(Estimated_Level > AT_threshold) %>%
+  #   mutate(computed_area = round(as.numeric(st_area(.)), 1)) %>%
+  #   mutate(area_hectare = round((computed_area / 10000), 2)) %>%
+  #   mutate(DATE = selected_day)
+  #
+  #
+  # AT_Boundaries_daily <- AT_Vectorized_Grid_daily %>%
+  #   st_union(.) %>% as_tibble() %>% st_as_sf() %>%
+  #   #mutate(event_type = "EHE") %>%
+  #   mutate(Estimated_Level = 1) %>%
+  #   mutate(computed_area = round(as.numeric(st_area(.)), 1)) %>%
+  #   mutate(area_hectare = round((computed_area / 10000), 2)) %>%
+  #   mutate(DATE = selected_day)
+  #
+  #
+  # blocks_joined_AT_daily <- st_join(
+  #   CA_blocks_compiled,
+  #   AT_Boundaries_daily,
+  #
+  #   join = st_intersects,
+  #   suffix = c("", "_GIS"),
+  #   left = FALSE) %>%
+  #   mutate(DATE = as.Date(selected_day, "%a, %d %b %Y")) %>%
+  #   st_as_sf() %>% as_tibble() %>% st_as_sf()
 
 
   # Resolve the issue with the spatially too small contours
@@ -333,14 +333,14 @@ while (selected_day <= end_date)
 
   ### Compile the stacked iteration outputs ----
   #### Vector format
-  CA_AT_Vectorized_Grid <- rbind(CA_AT_Vectorized_Grid,
-                                 AT_Vectorized_Grid_daily)
+  # CA_AT_Vectorized_Grid <- rbind(CA_AT_Vectorized_Grid,
+  #                                AT_Vectorized_Grid_daily)
 
   CA_AT_Contours <- rbind(CA_AT_Contours,
                           AT_Contours_daily)
 
-  CA_blocks_joined_EHE <- rbind(CA_blocks_joined_EHE,
-                                blocks_joined_AT_daily)
+  # CA_blocks_joined_EHE <- rbind(CA_blocks_joined_EHE,
+  #                               blocks_joined_AT_daily)
 
 
   #### Raster format
@@ -371,13 +371,13 @@ while (selected_day <= end_date)
                                         method = 'ngb'
                                       ))
 
-    cumulative_interpolated_idw <- cumulative_interpolated_idw +
-      projectRaster(
-        interpolated_idw_raster_masked,
-        stacked_interpolated_idw,
-        #method = 'bilinear'
-        method = 'ngb'
-      )
+    # cumulative_interpolated_idw <- cumulative_interpolated_idw +
+    #   projectRaster(
+    #     interpolated_idw_raster_masked,
+    #     stacked_interpolated_idw,
+    #     #method = 'bilinear'
+    #     method = 'ngb'
+    #   )
   }
   i <- i + 1
   print("stacking interpolated surface")
@@ -434,54 +434,54 @@ ObjSave(
 
 ###  Visualize the cumulative raster ----
 # compute the average interpolated surface
-cumulative_interpolated_idw <- cumulative_interpolated_idw / loop_length
-
-class(cumulative_interpolated_idw)
-nlayers(cumulative_interpolated_idw)
-dim(cumulative_interpolated_idw)
-##```
-
-##```{r}
-str(cumulative_interpolated_idw@data)
-#glimpse(cumulative_interpolated_idw@data)
-
-# cumulative_interpolated_idw <- readRDS(here(input_dir,
-#                                  "ehe_cumulative_interpolated_idw.rds"))[[1]]
-length(cumulative_interpolated_idw[cumulative_interpolated_idw])
-length(cumulative_interpolated_idw[cumulative_interpolated_idw > 1])
-length(cumulative_interpolated_idw[cumulative_interpolated_idw < 1])
-length(cumulative_interpolated_idw[cumulative_interpolated_idw == 1])
-cumulative_AT_coverage <- 100 * round(
-  (length(cumulative_interpolated_idw[cumulative_interpolated_idw > 1]) / length(cumulative_interpolated_idw[cumulative_interpolated_idw]))
-  ,4)
-
-plot_file_name <- paste0(sample_output_path, "/_AT_",
-                         "00_cumulative_interpolated_idw_",
-                         cumulative_AT_coverage,
-                         "_percent.jpg")
-
-jpeg(plot_file_name, width = 880, height = 1200)
-
-print(plot(cumulative_interpolated_idw))
-
-dev.off()
-
-class(cumulative_interpolated_idw)
-plot_file_name <- paste0(sample_output_path, "/_AT_",
-                         "01_cumulative_interpolated_idw_",
-                         cumulative_AT_coverage,
-                         "_percent.jpg")
-
-jpeg(plot_file_name, width = 880, height = 1200)
-
-print(spplot(cumulative_interpolated_idw))
-
-dev.off()
-##```
-
-### Export spatial objects ----
-writeRaster(cumulative_interpolated_idw, paste0(sample_output_path, "/_AT_",
-                                                "01_cumulative_interpolated_idw"), overwrite=TRUE)
+# cumulative_interpolated_idw <- cumulative_interpolated_idw / loop_length
+#
+# class(cumulative_interpolated_idw)
+# nlayers(cumulative_interpolated_idw)
+# dim(cumulative_interpolated_idw)
+# ##```
+#
+# ##```{r}
+# str(cumulative_interpolated_idw@data)
+# #glimpse(cumulative_interpolated_idw@data)
+#
+# # cumulative_interpolated_idw <- readRDS(here(input_dir,
+# #                                  "ehe_cumulative_interpolated_idw.rds"))[[1]]
+# length(cumulative_interpolated_idw[cumulative_interpolated_idw])
+# length(cumulative_interpolated_idw[cumulative_interpolated_idw > 1])
+# length(cumulative_interpolated_idw[cumulative_interpolated_idw < 1])
+# length(cumulative_interpolated_idw[cumulative_interpolated_idw == 1])
+# cumulative_AT_coverage <- 100 * round(
+#   (length(cumulative_interpolated_idw[cumulative_interpolated_idw > 1]) / length(cumulative_interpolated_idw[cumulative_interpolated_idw]))
+#   ,4)
+#
+# plot_file_name <- paste0(sample_output_path, "/_AT_",
+#                          "00_cumulative_interpolated_idw_",
+#                          cumulative_AT_coverage,
+#                          "_percent.jpg")
+#
+# jpeg(plot_file_name, width = 880, height = 1200)
+#
+# print(plot(cumulative_interpolated_idw))
+#
+# dev.off()
+#
+# class(cumulative_interpolated_idw)
+# plot_file_name <- paste0(sample_output_path, "/_AT_",
+#                          "01_cumulative_interpolated_idw_",
+#                          cumulative_AT_coverage,
+#                          "_percent.jpg")
+#
+# jpeg(plot_file_name, width = 880, height = 1200)
+#
+# print(spplot(cumulative_interpolated_idw))
+#
+# dev.off()
+# ##```
+#
+# ### Export spatial objects ----
+# writeRaster(cumulative_interpolated_idw, paste0(sample_output_path, "/_AT_",
+#                                                 "01_cumulative_interpolated_idw"), overwrite=TRUE)
 
 writeRaster(stacked_interpolated_idw, paste0(sample_output_path, "/_AT_",
                                              "02_stacked_interpolated_idw"), overwrite=TRUE)
@@ -491,7 +491,7 @@ writeRaster(stacked_interpolated_idw_rb, paste0(sample_output_path, "/_AT_",
                                                 "03_stacked_interpolated_idw_rb"), overwrite=TRUE)
 
 ObjSave(
-  cumulative_interpolated_idw,
+  #cumulative_interpolated_idw,
   stacked_interpolated_idw,
   stacked_interpolated_idw_rb,
 
