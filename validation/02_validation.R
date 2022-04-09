@@ -236,5 +236,7 @@ ggsave(plot_file_name,
        dpi = 300,
        width = 12, height = 12, units = "cm")
 
+gc()
+
 # Estimate impacted population ----
 source(here::here("validation", "sampling_for_model_comparison.R"), local=T)

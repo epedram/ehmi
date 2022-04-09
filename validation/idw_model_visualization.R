@@ -1,4 +1,3 @@
-
   dir.create(file.path(sample_output_path,
                        "Viz_Interpolation"))
   vis_output_path <- file.path(sample_output_path,
@@ -72,5 +71,6 @@ while (selected_day <= end_date)
          width = 16, height = 22, units = "cm")
 
   selected_day <- selected_day + 1
-}
 
+gc()
+}

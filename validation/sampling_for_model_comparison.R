@@ -42,7 +42,7 @@ fx_saveSHP(ca_voronoi_all_stations_dtsf, folder = rds_output_path,
            shpname = "ca_all_stations_voronoi",
            prefix = "",
            subfolder = "ca_all_stations_voronoi")
-
+gc()
 ## Sampling ----
 library(doParallel)
 cores <- detectCores() - 1
@@ -93,20 +93,20 @@ validation_stations_climate_dtsf <- noaa_stations_climate_dt %>% filter(.,
 length(unique(test_stations_climate_dtsf$Station_Name))
 length(unique(test_stations_climate_dtsf$DATE))
 
-glimpse(noaa_stations_climate_dt)
-plot(test_stations_points_dtsf[1])
-plot(validation_stations_points_dtsf[1])
+#glimpse(noaa_stations_climate_dt)
+#plot(test_stations_points_dtsf[1])
+#plot(validation_stations_points_dtsf[1])
 
 # Create Voronoi polygons ----
 voronoi_test_stations_points_dtsf <- fx_VoronoiPolygons_fromSF(test_stations_points_dtsf)
-glimpse(voronoi_test_stations_points_dtsf)
-plot(voronoi_test_stations_points_dtsf[1])
+#glimpse(voronoi_test_stations_points_dtsf)
+#plot(voronoi_test_stations_points_dtsf[1])
 
 ca_test_set_voronoi_dtsf <- st_intersection(st_cast(voronoi_test_stations_points_dtsf),
                                                  st_union(CA_counties_sf))
 
-glimpse(ca_test_set_voronoi_dtsf)
-plot(ca_test_set_voronoi_dtsf[1])
+#glimpse(ca_test_set_voronoi_dtsf)
+#plot(ca_test_set_voronoi_dtsf[1])
 
 # Join the nearest stations records
 validation_set_interim <- st_join(validation_stations_climate_dtsf,
@@ -164,6 +164,33 @@ idw_estimates_collector <- NULL
 i <- 1
 loop_length <- time_length(end_date - start_date + 1, unit = "day")
 
+test_stations_climate_valid <- test_stations_climate_dtsf[c("DATE", "shape_id",
+                                                            "dm_apparent_temperature")] %>%
+  filter(!is.na(dm_apparent_temperature)) %>%
+  filter(DATE >= start_date & DATE <= end_date)
+
+test_stations_sp <- as_Spatial(test_stations_climate_valid,
+                               cast = TRUE)
+
+# Replace point boundary extent with that of the state
+test_stations_sp@bbox <- W@bbox
+
+#length(unique(test_stations_sp@data$DATE))
+length(unique(test_stations_sp@data$dm_apparent_temperature))
+# Create an empty grid where n is the total number of cells
+grd              <- as.data.frame(spsample(test_stations_sp, "regular",
+                                           n = number_of_grid_cells))
+
+names(grd)       <- c("X", "Y")
+coordinates(grd) <- c("X", "Y")
+gridded(grd)     <- TRUE  # Create SpatialPixel object
+fullgrid(grd)    <- TRUE  # Create SpatialGrid object
+
+# Add projection information to the empty grid
+proj4string(test_stations_sp) <- proj4string(test_stations_sp)
+proj4string(grd) <- proj4string(test_stations_sp)
+
+gc()
 while (selected_day <= end_date)
 {
   #if (selected_day %in% AT_DATES[[2]])
@@ -196,23 +223,6 @@ while (selected_day <= end_date)
 
   print(selected_day)
   print("interpolating temperature surface")
-
-  # Replace point boundary extent with that of the state
-  test_stations_sp@bbox <- W@bbox
-  length(unique(test_stations_sp@data$DATE))
-  length(unique(test_stations_sp@data$dm_apparent_temperature))
-  # Create an empty grid where n is the total number of cells
-  grd              <- as.data.frame(spsample(test_stations_sp, "regular",
-                                             n = number_of_grid_cells))
-
-  names(grd)       <- c("X", "Y")
-  coordinates(grd) <- c("X", "Y")
-  gridded(grd)     <- TRUE  # Create SpatialPixel object
-  fullgrid(grd)    <- TRUE  # Create SpatialGrid object
-
-  # Add P's projection information to the empty grid
-  proj4string(test_stations_sp) <- proj4string(test_stations_sp)
-  proj4string(grd) <- proj4string(test_stations_sp)
 
   #Interpolate the grid cells using a power value of 2 (idp=2.0) ----
   interpolated_idw <- gstat::idw(dm_apparent_temperature ~ 1,
@@ -331,7 +341,7 @@ while (selected_day <= end_date)
          width = 16, height = 22, units = "cm")
 
 
-  ### Compile the stacked iteration outputs ----
+  ### Compile the iteration outputs ----
   #### Vector format
   # CA_AT_Vectorized_Grid <- rbind(CA_AT_Vectorized_Grid,
   #                                AT_Vectorized_Grid_daily)
@@ -341,7 +351,6 @@ while (selected_day <= end_date)
 
   # CA_blocks_joined_EHE <- rbind(CA_blocks_joined_EHE,
   #                               blocks_joined_AT_daily)
-
 
   #### Raster format
   rasValue = round(extract(interpolated_idw_raster_masked,
@@ -362,7 +371,7 @@ while (selected_day <= end_date)
     print(i)
   } else { # for the second round and afterwards
     print(i)
-
+    ### Stacking the daily raster outputs ----
     stacked_interpolated_idw <- stack(stacked_interpolated_idw,
                                       projectRaster(
                                         interpolated_idw_raster_masked,
@@ -387,7 +396,7 @@ while (selected_day <= end_date)
              " Completed", "\n\n"))
 
   selected_day <- selected_day + 1
-
+gc()
 } #
 
 ### IDW Error estimation ------
@@ -497,7 +506,7 @@ ObjSave(
 
   folder = sample_output_path)
 
-
+gc()
 source(here::here("validation", "idw_model_visualization.R"), local=T)
 
 #} # CLOSE SAMPLING LOOP (serial)
@@ -513,4 +522,3 @@ gc()
 
 print("Check")
 print(showConnections())
-
