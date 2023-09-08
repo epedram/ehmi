@@ -5,7 +5,7 @@ output: html_document
 ## Abstract
 Robust spatio-temporal delineation of extreme climate events and accurate identification of areas that are impacted by an event is a prerequisite for studying the epidemiology of climate change. In prior research, climate attributes such as temperature and humidity have often been linearly assigned to the population of the study unit from the closest weather station. This could result in inaccurate event delineation and biased assessment of extreme heat exposure. We have developed a spatio-temporal model to dynamically delineate boundaries for Extreme Heat Events (EHE) across space and over time, using a relative measure of Apparent Temperature (AT). Our surface interpolation approach offers a higher spatio-temporal resolution compared to the standard nearest-station assignment method. We show that the proposed approach can provide at least 80.8 percent improvement in identification of areas and populations impacted by extreme heat events. This improvement in average adjusts the misclassification of about one million Californians per day of an extreme event, who would be either unidentified or misidentified under extreme heat events between 2017 and 2021.
 
-The preprint is availabe at [SSRN](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4320415).
+The results of this study have been published as an open access research article at [Environmental Research Journal](https://www.sciencedirect.com/science/article/pii/S0013935123017887).
 
 ## Computational R Scripts
 
