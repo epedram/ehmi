@@ -26,36 +26,63 @@ foreach(i = 6:1, .verbose = TRUE) %dopar% {
     dplyr::filter(completeness_code >= i)
 
   qc_daily_summaries <- all_daily_summaries_inf2na %>%
-    dplyr::filter(completeness_code >= i)
+    dplyr::filter(completeness_code >= i) %>%
+    group_by(station_id)
 
   # Impute missing values ----
   library(imputeTS)
   ## https://www.rdocumentation.org/packages/imputeTS/
   qc_daily_summaries_imputed <- qc_daily_summaries %>%
     imputeTS::na_interpolation(., maxgap = 3) %>%
-    imputeTS::na_kalman(.) # for imputing larger gap sizes
+    imputeTS::na_kalman(., maxgap = maxgap + 2) # for imputing larger gap sizes
 
   ## Compute Heat Index ----
-  library(weathermetrics)
-  ## https://github.com/geanders/weathermetrics
-  ## https://rdrr.io/cran/weathermetrics/man/dewpoint.to.humidity.html
-  ## https://www.wpc.ncep.noaa.gov/html/heatindex.shtml
-
   qc_daily_summaries_imputed_heat_index <- qc_daily_summaries_imputed %>%
-    mutate(relative_humidity_avg = round(dewpoint.to.humidity(t = temperature_avg,
-                                                              dp = temperature_dewpoint_avg,
-                                                              temperature.metric = "celsius"), 2)) %>%
-
-    mutate(vapure_pressure = humidity::WVP1(temperature_dewpoint_avg, isK = F)) %>%
+    mutate(relative_humidity_avg = weathermetrics::dewpoint.to.humidity(t = temperature_avg,
+                                                               dp = temperature_dewpoint_avg,
+                                                               temperature.metric = "celsius")) %>%
+    
+    mutate(relative_humidity_avg_hum_lib = humidity::RH(t = temperature_avg,
+                                                      Td = temperature_dewpoint_avg,
+                                                      isK = F)) %>%
+    
     # address observations for which the imputed dew point temperature was higher than the temperature
-    imputeTS::na_interpolation(.) %>%
-
+    # * 4 imputation settings Kalman/NoKalman----
+    imputeTS::na_interpolation(., maxgap = maxgap + 2) %>% 
+  
+    # https://github.com/caijun/humidity (2019)
+    mutate(vapure_pressure_avg = humidity::WVP1(Td = temperature_dewpoint_avg, 
+                                                isK = F) * 0.1) %>%
+    # convert hectopascal (hPa) to kilopascal (kPa) 
+  
+    # https://github.com/anacv/HeatStress
+    mutate(apparent_temperature_heatstress_lib = HeatStress::apparentTemp(
+        tas = temperature_avg,
+        hurs = relative_humidity_avg,
+        wind = wind_speed_avg)) %>%
+    
+    mutate(affective_temperature_heatstress_lib = HeatStress::effectiveTemp(
+      tas = temperature_avg,
+      hurs = relative_humidity_avg,
+      wind = wind_speed_avg)) %>%
+       
+    mutate(heat_index_heatstress_lib = HeatStress::hi(
+      tas = temperature_avg,
+      hurs = relative_humidity_avg)) %>%
+    
+    # https://github.com/geanders/weathermetrics (2017)
+    mutate(heat_index_weathermetrics_lib = weathermetrics::heat.index(
+        t = temperature_avg,
+        dp = temperature_dewpoint_avg,
+        temperature.metric = "celsius")) %>%
+  
     # Apparent Temperature Computation ----
-    mutate(apparent_temperature = round( -2.7 + (1.04 * temperature_avg) +
-                                           (2 * vapure_pressure) - (0.65 * wind_speed_avg), 3)) %>%
+    mutate(apparent_temperature = -2.7 + (1.04 * temperature_avg) +
+                                         (2 * vapure_pressure_avg) - 
+                                         (0.65 * wind_speed_avg)) %>%
 
-    mutate(diff_at_n_t = apparent_temperature - temperature_avg)
-
+    mutate(diff_avgat_vs_avgt = apparent_temperature - temperature_avg) %>% 
+    mutate_if(is.double, ~ round(., 1))
 
   ## join summary tables with stations ----
   stations_daily_summaries_imputed_geo <- qc_daily_summaries_imputed_heat_index %>%
